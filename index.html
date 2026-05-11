@@ -1,0 +1,225 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AI Commit</title>
+<style>
+  * { 
+    box-sizing: border-box; 
+    margin: 0; 
+    padding: 0; 
+    -webkit-tap-highlight-color: transparent;
+  }
+  body { background: #0d1117; color: #e6edf3; font-family: system-ui, sans-serif; min-height: 100vh; padding: 20px; max-width: 600px; margin: 0 auto; }
+  h1 { font-size: 1.2rem; color: #58a6ff; margin-bottom: 16px; }
+  
+  #api-key {
+    width: 100%; margin-bottom: 16px; background: #161b22; border: 1px solid #30363d;
+    color: #e6edf3; border-radius: 22px; corner-shape: squircle; padding: 14px 18px;
+    font-family: monospace; font-size: 0.8rem; outline: none;
+    transition: border-color 0.2s ease;
+  }
+  #api-key:focus { border-color: #58a6ff; }
+
+  textarea {
+    width: 100%; height: 180px; background: #161b22; border: 1px solid #30363d;
+    color: #e6edf3; border-radius: 22px; corner-shape: squircle; padding: 18px; 
+    font-family: monospace;
+    font-size: 0.8rem; resize: vertical; outline: none;
+    transition: border-color 0.2s ease;
+  }
+  textarea:focus { border-color: #58a6ff; }
+  
+  button {
+    width: 100%; margin-top: 12px; padding: 14px;
+    background: #238636; border: none; border-radius: 22px; corner-shape: squircle;
+    color: #fff; font-size: 1rem; font-weight: 600; cursor: pointer;
+    display: flex; align-items: center; justify-content: center; gap: 8px;
+    transition: all 0.2s ease;
+  }
+  button:active:not(:disabled) { transform: scale(0.96); }
+  button:disabled { background: #2d3139; color: #666; cursor: not-allowed; }
+  
+  #copy-btn { background: #1f6feb; margin-top: 16px; padding: 12px; font-size: 0.9rem; }
+  #copy-btn.success { background: #238636; }
+
+  .spinner {
+    width: 18px; height: 18px;
+    border: 2px solid rgba(255, 255, 255, 0.3);
+    border-top-color: #ffffff;
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+    display: none;
+  }
+  .loading .spinner { display: block; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  #result {
+    margin-top: 16px; background: #161b22; border: 1px solid #30363d;
+    border-radius: 22px; corner-shape: squircle; padding: 18px; display: none;
+  }
+  #result p { font-size: 0.75rem; color: #8b949e; margin-bottom: 8px; }
+  #commit-cmd {
+    font-family: monospace;
+    font-size: 0.9rem; color: #79c0ff;
+    word-break: break-all; line-height: 1.5;
+  }
+  #status { margin-top: 10px; font-size: 0.85rem; color: #8b949e; text-align: center; }
+  .error { color: #f85149 !important; }
+</style>
+</head>
+<body>
+<h1>⚡ AI Commit Message</h1>
+
+<input type="password" id="api-key" placeholder="Enter Gemini API Key (saves locally)" />
+
+<p style="font-size:0.8rem;color:#8b949e;margin-bottom:12px;">Run <code style="font-family: monospace; color:#79c0ff">git diff --staged</code> → paste below</p>
+<textarea id="diff" placeholder="Paste your git diff here..." autofocus></textarea>
+
+<button id="gen-btn" onclick="generate()">
+  <div class="spinner"></div>
+  <span id="gen-text">Generate Commit Message</span>
+</button>
+
+<div id="result">
+  <p>Your commit message:</p>
+  <div id="commit-cmd"></div>
+  <button id="copy-btn" onclick="copyCmd()">Copy Message</button>
+</div>
+<div id="status"></div>
+
+<script>
+// Load saved API key on startup
+window.onload = () => {
+  const savedKey = localStorage.getItem('gemini_api_key');
+  if (savedKey) document.getElementById('api-key').value = savedKey;
+};
+
+async function generate() {
+  const apiKey = document.getElementById('api-key').value.trim();
+  const diff = document.getElementById('diff').value.trim();
+  
+  if (!apiKey) { setStatus('Please enter your Gemini API Key first.', true); return; }
+  if (!diff) { setStatus('Paste a diff first.', true); return; }
+
+  // Auto-save the API key so they don't have to enter it again
+  localStorage.setItem('gemini_api_key', apiKey);
+
+  const btn = document.getElementById('gen-btn');
+  const genText = document.getElementById('gen-text');
+  
+  btn.disabled = true;
+  btn.classList.add('loading');
+  genText.textContent = 'Generating...';
+  setStatus('Calling Gemini...');
+  document.getElementById('result').style.display = 'none';
+
+  try {
+    const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        systemInstruction: {
+          parts: [{
+            text: "You are a strict code assistant. Analyze the git diff and generate a single conventional commit message. Format: `type(scope): description`. Output strictly valid JSON."
+          }]
+        },
+        contents: [{
+          parts: [{
+            text: `Analyze this diff and return a JSON object with a single key "commit_message". The value must be the commit message string, no extra text.\n\n${diff.slice(0, 6000)}`
+          }]
+        }],
+        generationConfig: {
+          temperature: 0.1,
+          responseMimeType: "application/json"
+        },
+        safetySettings: [
+          { category: 'HARM_CATEGORY_HARASSMENT', threshold: 'BLOCK_NONE' },
+          { category: 'HARM_CATEGORY_HATE_SPEECH', threshold: 'BLOCK_NONE' },
+          { category: 'HARM_CATEGORY_SEXUALLY_EXPLICIT', threshold: 'BLOCK_NONE' },
+          { category: 'HARM_CATEGORY_DANGEROUS_CONTENT', threshold: 'BLOCK_NONE' }
+        ]
+      })
+    });
+
+    const data = await res.json();
+    
+    // Catch API key errors explicitly
+    if (data.error) {
+      throw new Error(data.error.message || 'API Error');
+    }
+
+    if (data.candidates?.[0]?.finishReason === 'SAFETY') {
+        throw new Error('Blocked by Google Safety Filters');
+    }
+
+    const rawOutput = data.candidates?.[0]?.content?.parts?.[0]?.text;
+    if (!rawOutput) throw new Error('No message returned from API');
+
+    const jsonOutput = JSON.parse(rawOutput);
+    const msg = jsonOutput.commit_message.trim();
+
+    document.getElementById('commit-cmd').textContent = msg;
+    document.getElementById('result').style.display = 'block';
+    setStatus('');
+  } catch (e) {
+    console.error(e);
+    setStatus('Error: ' + e.message, true);
+  }
+
+  btn.disabled = false;
+  btn.classList.remove('loading');
+  genText.textContent = 'Generate Commit Message';
+}
+
+function copyCmd() {
+  const cmd = document.getElementById('commit-cmd').textContent;
+  
+  const triggerSuccess = () => {
+    const btn = document.getElementById('copy-btn');
+    btn.textContent = '✓ Copied!';
+    btn.classList.add('success');
+    setTimeout(() => {
+      btn.textContent = 'Copy Message';
+      btn.classList.remove('success');
+    }, 2000);
+  };
+
+  if (navigator.clipboard && window.isSecureContext) {
+    navigator.clipboard.writeText(cmd).then(triggerSuccess).catch(fallbackCopy);
+  } else {
+    fallbackCopy(cmd, triggerSuccess);
+  }
+}
+
+function fallbackCopy(text, onSuccess) {
+  const textArea = document.createElement("textarea");
+  textArea.value = text;
+  textArea.style.position = "fixed";
+  textArea.style.top = "-9999px";
+  document.body.appendChild(textArea);
+  textArea.focus();
+  textArea.select();
+
+  try {
+    const successful = document.execCommand('copy');
+    if (successful && onSuccess) {
+      onSuccess();
+    } else {
+      throw new Error('Copy command failed');
+    }
+  } catch (err) {
+    setStatus('Copy failed. Please copy manually.', true);
+  }
+  document.body.removeChild(textArea);
+}
+
+function setStatus(msg, isError) {
+  const el = document.getElementById('status');
+  el.textContent = msg;
+  el.className = isError ? 'error' : '';
+}
+</script>
+</body>
+</html>
