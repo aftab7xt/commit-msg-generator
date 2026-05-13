@@ -41,6 +41,7 @@
   button:active:not(:disabled) { transform: scale(0.96); }
   button:disabled { background: #2d3139; color: #666; cursor: not-allowed; }
   
+  #paste-btn { background: #1f6feb; }
   #copy-btn { background: #1f6feb; margin-top: 16px; padding: 12px; font-size: 0.9rem; }
   #copy-btn.success { background: #238636; }
 
@@ -75,8 +76,9 @@
 <input type="password" id="api-key" placeholder="Enter Gemini API Key (saves locally)" />
 
 <p style="font-size:0.8rem;color:#8b949e;margin-bottom:12px;">Run <code style="font-family: monospace; color:#79c0ff">git diff --staged</code> → paste below</p>
-<button id="paste-btn" onclick="pasteDiff()" style="width:auto;margin-bottom:8px;padding:8px 18px;font-size:0.8rem;background:#1f6feb;">Paste Diff</button>
 <textarea id="diff" placeholder="Paste your git diff here..." autofocus></textarea>
+
+<button id="paste-btn" onclick="pasteDiff()">Paste Diff</button>
 
 <button id="gen-btn" onclick="generate()">
   <div class="spinner"></div>
